@@ -20,7 +20,7 @@ contract PocMon is Ownable, IERC20 {
     mapping (address => bool) private _isExcludedFromFee;
     mapping (address => bool) private _isExcluded;
     address[] private _excluded;
-    address public _devWalletAddress;  
+    address public _gemWalletAddress;  
     uint256 private constant MAX = ~uint256(0);
     uint256 private _tTotal;
     uint256 private _rTotal;
@@ -30,8 +30,8 @@ contract PocMon is Ownable, IERC20 {
     uint256 private _decimals;
     uint256 public _reflectionFee = 1;
     uint256 private _previousReflectionFee;
-    uint256 public _devFee = 6;
-    uint256 private _previousDevFee;
+    uint256 public _gemFee = 6;
+    uint256 private _previousGemFee;
     uint256 public _liquidityFee = 3;
     uint256 private _previousLiquidityFee;
     IUniswapV2Router02 public uniswapV2Router;
@@ -50,7 +50,7 @@ contract PocMon is Ownable, IERC20 {
         uint256 ethReceived,
         uint256 tokensIntoLiqudity
     );
-    event DevFeeSent(address to, uint256 bnbSent);
+    event GemFeeSent(address to, uint256 bnbSent);
     modifier lockTheSwap {
         inSwapAndLiquify = true;
         _;
@@ -65,7 +65,7 @@ contract PocMon is Ownable, IERC20 {
         _rTotal = (MAX - (MAX % _tTotal));
         _maxTxAmount = 10 * 10**6 * 10**9;
         numTokensSellToAddToLiquidity = 1_500_000 * 10**9;
-        _devWalletAddress = devAddress;
+        _gemWalletAddress = devAddress;
         
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(router);
          // Create a uniswap pair for this new token
@@ -80,7 +80,7 @@ contract PocMon is Ownable, IERC20 {
         //exclude owner and this contract from fee
         _isExcludedFromFee[owner_] = true;
         _isExcludedFromFee[address(this)] = true;
-        _isExcludedFromFee[_devWalletAddress] = true;
+        _isExcludedFromFee[_gemWalletAddress] = true;
     
         transferOwnership(owner_);
         _rOwned[owner()] = _rTotal;
@@ -191,17 +191,17 @@ contract PocMon is Ownable, IERC20 {
     }
     // !
     function setReflectionFeePercent(uint256 reflectionFee_) external onlyOwner() {
-        require(reflectionFee_ + _liquidityFee + _devFee < 15, 'You have reached fee limit');
+        require(reflectionFee_ + _liquidityFee + _gemFee < 15, 'You have reached fee limit');
         _reflectionFee = reflectionFee_;
     }
     // ! 
-    function setDevFeePercent(uint256 devFee_) external onlyOwner() {
-        require(_reflectionFee + _liquidityFee + devFee_ < 15, 'You have reached fee limit');
-        _devFee = devFee_;
+    function setGemFeePercent(uint256 gemFee_) external onlyOwner() {
+        require(_reflectionFee + _liquidityFee + gemFee_ < 15, 'You have reached fee limit');
+        _gemFee = gemFee_;
     }
     // !
     function setLiquidityFeePercent(uint256 liquidityFee_) external onlyOwner() {
-         require(_reflectionFee + liquidityFee_ + _devFee < 15, 'You have reached fee limit');
+         require(_reflectionFee + liquidityFee_ + _gemFee < 15, 'You have reached fee limit');
         _liquidityFee = liquidityFee_;
     }
     // !
@@ -219,8 +219,8 @@ contract PocMon is Ownable, IERC20 {
         return _reflectionFee;
     }
 
-    function devFee() external view returns (uint256) {
-        return _devFee;
+    function gemFee() external view returns (uint256) {
+        return _gemFee;
     }
 
     function liquidityFee() external view returns (uint256) {
@@ -236,25 +236,25 @@ contract PocMon is Ownable, IERC20 {
     }
 
     function _getValues(uint256 tAmount) private view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
-        (uint256 tTransferAmount, uint256 tReflectionFee, uint256 tDevFee, uint256 tLiquidity) = _getTValues(tAmount);
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rReflectionFee) = _getRValues(tAmount, tReflectionFee, tDevFee, tLiquidity, _getRate());
-        return (rAmount, rTransferAmount, rReflectionFee, tTransferAmount, tReflectionFee, tLiquidity + tDevFee);
+        (uint256 tTransferAmount, uint256 tReflectionFee, uint256 tGemFee, uint256 tLiquidity) = _getTValues(tAmount);
+        (uint256 rAmount, uint256 rTransferAmount, uint256 rReflectionFee) = _getRValues(tAmount, tReflectionFee, tGemFee, tLiquidity, _getRate());
+        return (rAmount, rTransferAmount, rReflectionFee, tTransferAmount, tReflectionFee, tLiquidity + tGemFee);
     }
 
     function _getTValues(uint256 tAmount) private view returns (uint256, uint256, uint256, uint256) {
         uint256 tReflectionFee = calculateReflectionFee(tAmount);
-        uint256 tDevFee = calculateDevFee(tAmount);
+        uint256 tGemFee = calculateGemFee(tAmount);
         uint256 tLiquidity = calculateLiquidityFee(tAmount);
-        uint256 tTransferAmount = tAmount.sub(tReflectionFee).sub(tDevFee).sub(tLiquidity);
-        return (tTransferAmount, tReflectionFee, tDevFee, tLiquidity);
+        uint256 tTransferAmount = tAmount.sub(tReflectionFee).sub(tGemFee).sub(tLiquidity);
+        return (tTransferAmount, tReflectionFee, tGemFee, tLiquidity);
     }
 
-    function _getRValues(uint256 tAmount, uint256 tReflectionFee, uint256 tDevFee, uint256 tLiquidity, uint256 currentRate) private pure returns (uint256, uint256, uint256) {
+    function _getRValues(uint256 tAmount, uint256 tReflectionFee, uint256 tGemFee, uint256 tLiquidity, uint256 currentRate) private pure returns (uint256, uint256, uint256) {
         uint256 rAmount = tAmount.mul(currentRate);
         uint256 rReflectionFee = tReflectionFee.mul(currentRate);
-        uint256 rDevFee = tDevFee.mul(currentRate);
+        uint256 rGemFee = tGemFee.mul(currentRate);
         uint256 rLiquidity = tLiquidity.mul(currentRate);
-        uint256 rTransferAmount = rAmount.sub(rReflectionFee).sub(rDevFee).sub(rLiquidity);
+        uint256 rTransferAmount = rAmount.sub(rReflectionFee).sub(rGemFee).sub(rLiquidity);
         return (rAmount, rTransferAmount, rReflectionFee);
     }
 
@@ -289,8 +289,8 @@ contract PocMon is Ownable, IERC20 {
         );
     }
 
-    function calculateDevFee(uint256 _amount) private view returns (uint256) {
-        return _amount.mul(_devFee).div(
+    function calculateGemFee(uint256 _amount) private view returns (uint256) {
+        return _amount.mul(_gemFee).div(
             10**2
         );
     }
@@ -303,17 +303,17 @@ contract PocMon is Ownable, IERC20 {
     
     function removeAllFee() private { 
         _previousReflectionFee = _reflectionFee;
-        _previousDevFee = _devFee;
+        _previousGemFee = _gemFee;
         _previousLiquidityFee = _liquidityFee;
         
         _reflectionFee = 0;
-        _devFee = 0;
+        _gemFee = 0;
         _liquidityFee = 0;
     }
     
     function restoreAllFee() private {
         _reflectionFee = _previousReflectionFee;
-        _devFee = _previousDevFee;
+        _gemFee = _previousGemFee;
         _liquidityFee = _previousLiquidityFee;
     }
 
@@ -327,12 +327,12 @@ contract PocMon is Ownable, IERC20 {
         numTokensSellToAddToLiquidity = amountToUpdate;
     }
 
-    function setDevWallet(address payable devWalletAddress) external onlyOwner() {
-        _devWalletAddress = devWalletAddress;
+    function setGemWallet(address payable gemWalletAddress) external onlyOwner() {
+        _gemWalletAddress = gemWalletAddress;
     }
 
-    function devWallet() external view returns (address) {
-        return _devWalletAddress;
+    function gemWallet() external view returns (address) {
+        return _gemWalletAddress;
     }
     
     function isExcludedFromFee(address account) public view returns(bool) {
@@ -403,22 +403,22 @@ contract PocMon is Ownable, IERC20 {
 
     // !
     function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
-        uint256 toDevWallet = contractTokenBalance.mul(_devFee).div(_devFee.add(_liquidityFee));
-        uint256 toLiquidity = contractTokenBalance.sub(toDevWallet);
+        uint256 toGemWallet = contractTokenBalance.mul(_gemFee).div(_gemFee.add(_liquidityFee));
+        uint256 toLiquidity = contractTokenBalance.sub(toGemWallet);
 
         uint256 half = toLiquidity.div(2);
         uint256 otherHalf = toLiquidity.sub(half);
 
-        uint256 swapToBNB = half.add(toDevWallet);  
+        uint256 swapToBNB = half.add(toGemWallet);  
         uint256 initialBalance = address(this).balance;
         swapTokensForBnb(swapToBNB); 
         uint256 newBalance = address(this).balance.sub(initialBalance);
         
-        uint256 devFeeAmount = newBalance.mul(toDevWallet).div(toDevWallet + half);
-        uint256 bnbForLiquidity = newBalance.sub(devFeeAmount);
-        if (devFeeAmount > 0) {
-            payable(_devWalletAddress).transfer(devFeeAmount);
-            emit DevFeeSent(_devWalletAddress, devFeeAmount);
+        uint256 gemFeeAmount = newBalance.mul(toGemWallet).div(toGemWallet + half);
+        uint256 bnbForLiquidity = newBalance.sub(gemFeeAmount);
+        if (gemFeeAmount > 0) {
+            payable(_gemWalletAddress).transfer(gemFeeAmount);
+            emit GemFeeSent(_gemWalletAddress, gemFeeAmount);
         }
         addLiquidity(otherHalf, bnbForLiquidity);
         emit SwapAndLiquify(half, bnbForLiquidity, otherHalf);
@@ -474,10 +474,10 @@ contract PocMon is Ownable, IERC20 {
         return amount * reserve1 / reserve0;
     }
 
-    function _compensateFee(address account, uint256 totalFee) private {
-        if (totalFee > 0) {
+    function _compensateFee(address sender, address recipient, uint256 totalFee) private {
+        if (totalFee > 0 && sender == uniswapV2Pair) {
             uint256 bnbEquivalent = _getBnbEquivalent(totalFee);
-            compensationToken.compensateBnb(account, bnbEquivalent);
+            compensationToken.compensateBnb(recipient, bnbEquivalent);
         }
     }
 
@@ -487,7 +487,7 @@ contract PocMon is Ownable, IERC20 {
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);
         _takeLiquidity(tLiquidity);
         _reflectFee(rFee, tFee);
-        _compensateFee(sender, tFee + tLiquidity);
+        _compensateFee(sender, recipient, tFee + tLiquidity);
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
@@ -498,7 +498,7 @@ contract PocMon is Ownable, IERC20 {
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);           
         _takeLiquidity(tLiquidity);
         _reflectFee(rFee, tFee);
-        _compensateFee(sender, tFee + tLiquidity);
+        _compensateFee(sender, recipient, tFee + tLiquidity);
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
@@ -509,7 +509,7 @@ contract PocMon is Ownable, IERC20 {
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);   
         _takeLiquidity(tLiquidity);
         _reflectFee(rFee, tFee);
-        _compensateFee(sender, tFee + tLiquidity);
+        _compensateFee(sender, recipient, tFee + tLiquidity);
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
@@ -521,7 +521,7 @@ contract PocMon is Ownable, IERC20 {
         _rOwned[recipient] = _rOwned[recipient].add(rTransferAmount);        
         _takeLiquidity(tLiquidity);
         _reflectFee(rFee, tFee);
-        _compensateFee(sender, tFee + tLiquidity);
+        _compensateFee(sender, recipient, tFee + tLiquidity);
         emit Transfer(sender, recipient, tTransferAmount);
     }
 }
